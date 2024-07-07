@@ -1,5 +1,7 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.IO;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
@@ -11,21 +13,48 @@ public class MainManager : MonoBehaviour
     public Rigidbody Ball;
 
     public Text ScoreText;
+    public Text HighScoreText;
     public GameObject GameOverText;
-    
+    public GameObject NameText;
+
     private bool m_Started = false;
-    private int m_Points;
     
     private bool m_GameOver = false;
 
-    
-    // Start is called before the first frame update
+    private Score currentScore;
+
+    private Score loadedScore;
+
+    private string saveFilePath;
+
+    private bool gameLoaded;
+
+    private void Awake()
+    {
+        saveFilePath = Application.persistentDataPath + "/saveFile.json";
+        currentScore = new Score
+        {
+            playerName = "test",
+            score = 0
+        };
+        loadedScore = new Score
+        {
+            playerName = "CPU",
+            score = 0
+        };
+    }
+
     void Start()
+    {
+        LoadScores();
+    }
+
+    private void LoadGame()
     {
         const float step = 0.6f;
         int perLine = Mathf.FloorToInt(4.0f / step);
-        
-        int[] pointCountArray = new [] {1,1,2,2,5,5};
+
+        int[] pointCountArray = new[] { 1, 1, 2, 2, 5, 5 };
         for (int i = 0; i < LineCount; ++i)
         {
             for (int x = 0; x < perLine; ++x)
@@ -36,16 +65,21 @@ public class MainManager : MonoBehaviour
                 brick.onDestroyed.AddListener(AddPoint);
             }
         }
+        gameLoaded = true;
     }
 
     private void Update()
     {
+        if (!gameLoaded)
+        {
+            return;
+        }
         if (!m_Started)
         {
             if (Input.GetKeyDown(KeyCode.Space))
             {
                 m_Started = true;
-                float randomDirection = Random.Range(-1.0f, 1.0f);
+                float randomDirection = UnityEngine.Random.Range(-1.0f, 1.0f);
                 Vector3 forceDir = new Vector3(randomDirection, 1, 0);
                 forceDir.Normalize();
 
@@ -64,13 +98,58 @@ public class MainManager : MonoBehaviour
 
     void AddPoint(int point)
     {
-        m_Points += point;
-        ScoreText.text = $"Score : {m_Points}";
+        currentScore.score += point;
+        ScoreText.text = $"Score : {currentScore.score}";
     }
 
     public void GameOver()
     {
         m_GameOver = true;
         GameOverText.SetActive(true);
+        if (currentScore.score > loadedScore?.score)
+        {
+            SaveScore();
+            loadedScore = currentScore;
+            UpdateHighScore();
+        }
+    }
+
+    private void SaveScore()
+    {
+        string scoreString = JsonUtility.ToJson(currentScore);
+        File.WriteAllText(saveFilePath, scoreString);
+    }
+
+    private void LoadScores()
+    {
+        if (!File.Exists(saveFilePath))
+        {
+            return;
+        }
+        string scoreJson = File.ReadAllText(saveFilePath);
+        loadedScore = JsonUtility.FromJson<Score>(scoreJson);
+        UpdateHighScore();
+    }
+
+    private void UpdateHighScore()
+    {
+        if (loadedScore != null)
+        {
+            HighScoreText.text = $"Best Score: {loadedScore.score} | Name: {loadedScore.playerName}";
+        }
+    }
+
+    public void PlayerNameEntered(string name)
+    {
+        currentScore.playerName = name;
+        NameText.SetActive(false);
+        LoadGame();
+    }
+
+    [Serializable]
+    private class Score
+    {
+        public string playerName;
+        public int score;
     }
 }
